@@ -88,7 +88,7 @@ class Datagrid {
 		$this->columns = new Collection();
 		$this->filters = new Collection();
 
-		$this->config = $config;
+		$this->setConfig($config);
 
 		$this->setRows($rows);
 		$this->setFilters($filters);
@@ -104,6 +104,54 @@ class Datagrid {
 	public function show($id = null) {
 		return View::make('datagrid::grid', ['grid' => $this, 'id' => $id])->render();
 	}
+
+    /**
+     * Get per page param name
+     *
+     * @return null|string
+     */
+    public function getPerPageName() {
+        return $this->config['per_page_name'] ?? null;
+    }
+
+    /**
+     * Set per page param name
+     *
+     * @param string limit_param_name
+     *
+     * @return $this
+     */
+    public function setPerPageName($per_page_name) {
+        if ($per_page_name === true) {
+            $per_page_name = \Config::get('pagination.per_page_name');
+        }
+
+        $this->config['per_page_name'] = $per_page_name;
+
+        return $this;
+    }
+
+    /**
+     * Build url according per_page value
+     *
+     * @param int $per_page
+     *
+     * @return string
+     */
+    public function buildPerPageUrl($per_page = null) {
+        $name = $this->getPerPageName();
+        $pagination = $this->getPagination();
+        $current_val = Request::query($name);
+
+        if ($name) {
+            $pagination->appends($name, $per_page);
+        }
+
+        $url = $pagination->url($pagination->currentPage());
+        $pagination->appends($name, $current_val);
+
+        return $url;
+    }
 
 	/**
 	* Get row setter (if exists)
@@ -400,11 +448,20 @@ class Datagrid {
 			$filters->put('order_by', $field);
 			$filters->put('order_dir', 'ASC');
 		}
-		
-		$per_page = intval(\Illuminate\Support\Facades\Request::get('per_page', \Config::get('pagination.per_page')));
-        	$per_page = $per_page > 0 ? $per_page : \Config::get('pagination.per_page');
 
-		return ['f' => $filters->toArray(), 'page' => 1, 'per_page' => $per_page];
+		$r = ['f' => $filters->toArray(), 'page' => 1];
+
+		if ($per_page_name = $this->getPerPageName()) {
+            $per_page = intval(Request::get($per_page_name, \Config::get('pagination.per_page')));
+
+            if ($per_page < 1 || $per_page > \Config::get('pagination.per_page_limit')) {
+                $per_page = \Config::get('pagination.per_page');
+            }
+
+            $r += [$per_page_name => $per_page];
+        }
+
+		return $r;
 	}
 
 	/*
@@ -470,8 +527,16 @@ class Datagrid {
 	 * @throws DataException
 	 */
 	public function getConfig($key) {
+        $ignore_getters = ['row', 'rows', 'filter', 'filters', 'column', 'columns'];
+
 		if (array_key_exists($key, $this->config)) {
-			return $this->config[$key];
+            $method = 'get' . ucfirst(camel_case($key));
+
+            if (!in_array($key, $ignore_getters) && method_exists($this, $method)) {
+                return $this->$method();
+            } else {
+                return $this->config[$key];
+            }
 		}
 
 		throw new DataException('Configuration value not found!');
@@ -485,7 +550,17 @@ class Datagrid {
 	 * @return $this
 	 */
 	public function setConfig(array $config = []) {
-		$this->config = array_replace($this->config, $config);
+	    $ignore_setters = ['row', 'rows', 'filter', 'filters', 'column', 'columns'];
+
+        foreach ($config as $key => $value) {
+            $method = 'set' . ucfirst(camel_case($key));
+
+            if (!in_array($key, $ignore_setters) && method_exists($this, $method)) {
+                $this->$method($value);
+            } else {
+                $this->config[$key] = $value;
+            }
+        }
 
 		return $this;
 	}
@@ -602,5 +677,23 @@ class Datagrid {
         $parameters = \Illuminate\Support\Facades\Route::current()->parameters();
 
         return action($controller, $parameters) . ($get_params ? '?' . http_build_query($get_params) : '');
+    }
+
+    public static function getCurrentPerPage($per_page_name = null) {
+        if ($per_page_name === null) {
+            $per_page_name = \Config::get('pagination.per_page_name');
+        }
+
+        $per_page = intval(Request::query($per_page_name, 0));
+
+        if ($per_page === 0) {
+            return null;
+        }
+
+        if ($per_page < 1 || $per_page > \Config::get('pagination.per_page_limit')) {
+            $per_page = \Config::get('pagination.per_page');
+        }
+
+        return $per_page;
     }
 }

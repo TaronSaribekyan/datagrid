@@ -11,6 +11,11 @@
 		@endforeach
 	@endif
 
+	<small class="text-secondary">
+		@if($grid->getPagination() instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator && $grid->getPagination()->total())
+		Ցուցադրված է՝ {{ $grid->getRows()->count() }}֊ը {{ $grid->getPagination()->total() }}֊ից
+		@endif
+	</small>
 	<table data-dg-type="table" class="table table-striped table-hover table-bordered">
 		<thead>
 		<!-- Titles -->
@@ -29,7 +34,16 @@
 						@endif
 					</th>
 				@else
-					<th data-dg-col="actions"><!-- Actions --></th>
+					<th data-dg-col="actions">
+						@if($grid->getPerPageName())
+							<select name="{{ $grid->getPerPageName() }}" class="form-control m-1" onchange="document.location.assign(this.value || this.options[this.selectedIndex].value)">
+								<option value="{{ $grid->buildPerPageUrl() }}">Քանակ</option>
+								@foreach([10, 20, 30, 50, 100] as $per_page)
+									<option value="{{ $grid->buildPerPageUrl($per_page) }}" @if(request()->input($grid->getPerPageName()) == $per_page) selected @endif>{{ $per_page }}</option>
+								@endforeach
+							</select>
+						@endif
+					</th>
 				@endif
 			@endforeach
 		</tr>
@@ -93,8 +107,10 @@
 					<td data-dg-col="{{ $col->getKey() }}" {!! $col->getAttributesHtml() !!}>
 						@if ($col->hasWrapper())
 							{!! $col->wrapper($row->{$col->getKey(true)}, $row) !!}
-						@else
-							{!! $row->{$col->getKey(true)} !!}
+						@elseif (\Illuminate\Support\Str::endsWith($col->getKey(true), ['_badge']))
+                            {!! $row->{$col->getKey(true)} !!}
+                        @else
+							{{ $row->{$col->getKey(true)} }}
 						@endif
 					</td>
 				@endforeach
@@ -102,7 +118,7 @@
 		@empty
 			<tr data-dg-type="empty-result">
 				<td colspan="{{ $grid->getColumnsCount() }}">
-					No results found!
+					Առայժմ դատարկ եմ ;)
 				</td>
 			</tr>
 		@endforelse
