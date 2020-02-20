@@ -240,6 +240,21 @@ class Datagrid {
 
 		return $this;
 	}
+	
+	/**
+	* Reset grid rows
+	*
+	* @param $rows
+	*
+	* @return $this
+	*/
+	public function resetRows($rows) {
+		$this->rows = new Collection();
+
+		$this->setRows($rows);
+
+		return $this;
+	}
 
 	/*
 	|--------------------------------------------------------------------------
